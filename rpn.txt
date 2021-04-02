@@ -1,0 +1,111 @@
+# Before getting into what this file does we should first mention, briefly,
+# that other file, the one that ends with ".mem".
+# It contains just a few lines.  The first one is the contents of the stack.
+# The second is the names and contents of the storage registers.
+# That file is created/over-written every time you type the 'quit' command
+# so commenting it is not advisable.  Just know that it doesn't need to be
+# edited and can be deleted at any time.  It loads once: when you start the
+# program.
+
+
+# This file is for writing and storing programs.  You can run them by
+# typing 'EXC <label>'.  This text file can be thought of as the calculator's
+# programming memory.  It's loaded every time the calculator is run and
+# is available at any time.  (The comments, of course, do NOT get loaded.)
+#
+# Programs for this calculator start with a label (LBL) and end with a 
+# return (RTN).  Everything in between is just the same key strokes you
+# put in manually except for the looping, branching, testing stuff,
+# and comments (anything after the '#' to the end of the line is ignored).
+# Line breaks are also ignored except to mark the end of a comment.
+
+# The below should create the equivalent of this command line:
+# "DUP SQ PI * SWAP 2 * PI *"
+#
+# A PROGRAM TO TEST THE BASICS
+LBL a
+DUP SQ PI * PSE	# area of a circle with a radius of x
+SWAP 2 * PI * 	# circumference of the same circle.
+PSE RTN		# <- return.  used to exit routine (or subroutine)
+
+# A PROGRAM TO TEST TESTS AND BRANCHING
+# With inputs of -4 & 5 it should produce [?, -4, 2, 1] & [?, ?, 5, 1]
+LBL b
+x<0? GSB C
+1
+GTO F
+LBL C
+2
+LBL F
+RTN
+# Note that line breaks are purely optional.  All this could've been
+# written on one line and mostly in lowercase (only the labels are
+# case sensitive).
+# Like this:
+# lbl b x<0? gsb C 1 gto f lbl C 2 lbl f rtn
+
+# And now: A SOLVER FOR THE QUADRATIC EQUATION.
+# (Note that this requires a 4 level stack.)
+# Input: a b c (in that order) for ax^2 + bx + c = 0
+LBL qf
+0 + RD SWAP / 2 / CHS STO A DUP * RCL A
+SWAP RD RD / - SQRT STO A - 
+SWAP RCL A + DEL A CLS
+RTN
+
+# INTERSECTION OF TWO LINES:
+# One point at (0,0) and the other at (z,t)
+# Line thru (0,0) has an angle of y
+# Line thru (z,t) has an angle of x
+LBL i2p 
+TAN STO B
+RU
+*
+RU
+SWAP
+-
+SWAP
+TAN STO A RCL B
+-
+/
+DUP
+RCL A
+*
+SWAP DEL A DEL B CLS
+RTN
+
+# Lowest Common Multiple |a*b|/(gcd(a,b)):
+LBL lcm
+INT SWAP INT STO X * ABS DUP RCL X / RCL X DEL X GCD / CLS
+RTN
+
+# What is the angle of x in degrees?:
+LBL d
+DEG SHOW RAD
+RTN
+
+# List of mathmatical constants that might be useful:
+LBL con
+6.674E-11 STO G RD # Newton's; Nm^2/kg^2
+9.81 STO g RD # m/s^2
+6.022e23 STO AVO RD # Avogadro's constant
+5.391e-44 STO PLNKT RD # Planck time in secs
+299_792_458 STO c RD # Speed of light; m/s
+RTN
+
+# Want to know what everything in the stack looks like in radians?
+# (assumes everything in the stack is in radians and display it in degrees):
+LBL degrees
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RTN
+
+# Now let's just show the full values of everything in the stack:
+LBL show
+RU SHOW
+RU SHOW
+RU SHOW
+RU SHOW
+RTN
