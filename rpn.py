@@ -13,7 +13,7 @@ For example: 4 22 7 / + will divide 22 by 7 then add 4 to the result.
 A complete list of operators can be displayed by typing in: "help op"
 """
 
-version = 'RPN Calc version 1.07'
+version = 'RPN Calc version 1.08'
 
 # Notes:
 # ------
@@ -95,16 +95,25 @@ mem        = {}    # Dictionary of storage registers.
 memnam     = os.path.splitext(__file__)[0] + '.mem'
 prognam    = os.path.splitext(__file__)[0] + '.txt'
 
-if os.name == 'posix': # M$ doesn't handle these properly:
-  RED = '\033[91m'
-  YLW = '\033[93m'
-  WHT = '\033[0m'
+# common usage: print(f'{XXX}')
+if os.name == 'posix': # other OS might not handle these properly:
+  RED = '\033[91m' # Makes the text following it red
+  YLW = '\033[93m' # Makes the text following it yellow
+  WHT = '\033[0m'  # Makes the text following it white (default)
+  CLS = '\x1b[2J'  # Clears the screen above the stack
+  SIG = '\u03A3'   # Sigma character
+  SS2 = '\u00B2'   # Superscript 2 (as in ^2)
+  OVR = '\u0304'   # Puts a line over the char in front of it
 else:
   RED = ''
   YLW = ''
   WHT = ''
+  CLS = ''
+  SIG = 'E'
+  SS2 = '^2'
+  OVR = '(mean)'
 
-# just so we don't have to use shift.
+# just so we don't have to use shift key very much
 kbsc2 = {
         'c.f'  :'c>f',
         'f.c'  :'f>c',
@@ -323,7 +332,15 @@ op_dict = {
 'Delete a keyboard shortcut: scutdel <shortcut>',
   'help':
 'I\'m being repressed! Also: followed by an operator gives detailed info on \
-that operator, while \'op\' will list all operators.'
+that operator, while \'op\' will list all operators.',
+  'version':
+'Display the current version number.',
+  'stat':
+'Adds the values of x & y to the statistics engine.\n\
+Follow with \'show\' to display stat info without adding to it.\n\
+Follow with \'undo\' to remove x & y from the stats.\n\
+Follow with \'clear\' to reset stats to zero.\n\
+Follow with \'est\' uses \'x\' to return an estimated \'y\''
   }
 
 # function to initialize the size of the stack and fill it with zeros:
@@ -371,12 +388,19 @@ def program_data(progf):
     return(prog)
 
 # This is the guts of the whole thing...
-def calc(stack, mem, prog_listing, decimal_places):
+def calc(stack, mem, prog_listing, decimal_places, stat_regs):
   """Processes all input."""
+  # statistical variables:
+  Sn  = stat_regs[0]
+  Sx  = stat_regs[1]
+  Sy  = stat_regs[2]
+  Sx2 = stat_regs[3]
+  Sy2 = stat_regs[4]
+  Sxy = stat_regs[5]
 
   incr = True # in case you want to stop the pointer (n) from incrementing
 
-  print(f"\x1b[2J{YLW}Type 'help' for documentation.")
+  print(f"{CLS}{YLW}Type 'help' for documentation.")
   print(f"Type 'help op' for a list of available operators.")
   print(f"Type 'help <oper>' (without braces) for specifics on an operator.")
   print(f"Type 'scut' for a list of keyboard shortcuts.{WHT}\n")
@@ -399,25 +423,14 @@ def calc(stack, mem, prog_listing, decimal_places):
     # this works in linux on my chromebook.
     # remove if you're a history buff.
     if os.name == 'posix': #not sure this will work on other systems
-      print(f'\x1b[2J') # clear the screen.
+      print(f'{CLS}') # clear the screen.
 
     try:
       if cmd_ln[n].lower() in ['quit', 'exit', 'close']:
         fh = open(memnam, 'w', encoding='utf-8')
-        fh.write(str(stack) + '\n' + \
-            str(mem) + '\n' + \
-            str(decimal_places) + '\n' + \
-            str(kbsc))
+        fh.write(f'{stack}\n{mem}\n{decimal_places}\n{kbsc}\n')
+        fh.write(f'[{Sn}, {Sx}, {Sy}, {Sx2}, {Sy2}, {Sxy}]')
         fh.close()
-        # this print statement is a test and should be
-        # deleted when done testing.
-        # print(f'\n' + \
-        #        str(stack) + '\n' + \
-        #        str(mem) + '\n' + \
-        #        str(prog_listing) + '\n' + \
-        #        __file__ + '\n' + \
-        #        memnam + '\n' + \
-        #        prognam + '\n')
         break
     except IndexError: # just pressing ENTER is the same as 'dup'
       x = pull()
@@ -851,8 +864,7 @@ def calc(stack, mem, prog_listing, decimal_places):
         #
         # display keyboard shortcuts:
         elif token == 'scut':
-          print(f'{YLW}' + \
-          f'Keyboard shortcuts:\n{str(kbsc)[1:-1].replace(": ",":")}{WHT}\n')
+          print(f'{YLW}Keyboard shortcuts:\n{str(kbsc)[1:-1].replace(": ",":")}{WHT}\n')
         #
         # add a shortcut to the list:
         elif token == 'scutadd':
@@ -878,7 +890,7 @@ def calc(stack, mem, prog_listing, decimal_places):
         #
         # clear the screen of unwanted messages:
         elif token == 'cls':
-          print(f'\x1b[2J')
+          print(f'{CLS}')
         #
         # Programming related commands
         #
@@ -1058,7 +1070,7 @@ def calc(stack, mem, prog_listing, decimal_places):
           if os.name == 'posix':
             os.system("vim {}".format(os.path.splitext(__file__)[0]+'.txt'))
             prog_listing = program_data(prognam) # reload
-            print(f'\x1b[2J')
+            print(f'{CLS}')
 
         #
         # print the version number:
@@ -1095,6 +1107,63 @@ def calc(stack, mem, prog_listing, decimal_places):
           else: # just print the __doc__ string from the top
             print(f'{YLW}{__doc__}{WHT}')
         #
+        #
+        #
+        # 2 variable statistics:
+        elif token == 'stat':
+          x = pull()
+          y = pull()
+          # no changes to the stack
+          push(y)
+          push(x)
+          # if there's nothing after 'stat' then add x & y to the stat registers
+          if n+1 == len(cmd_ln):
+            # All the statistical variables we need
+            Sn  += 1    # incr n - tracks # of xy pairs
+            Sx  += x    # sum of the x entries
+            Sy  += y    # sum of the y entries
+            Sx2 += x**2 # sum of the squares of the x entries
+            Sy2 += y**2 # sum of the squares of the y entries
+            Sxy += x*y  # sum of the product of the x & y entries
+# screw all this vvvvvvv just show all statistcal results every time you sto values!
+          else:
+            n += 1
+          if cmd_ln[n] == 'clear':
+            Sn = Sx = Sy = Sx2 = Sy2 = Sxy = 0
+          if cmd_ln[n] == 'undo':
+            Sn  -= 1
+            Sx  -= x
+            Sy  -= y
+            Sx2 -= x**2
+            Sy2 -= y**2
+            Sxy -= x*y
+          # essentially anything after 'stat' will stop x & y from being added.
+          print(f'{YLW}n:   {WHT}{Sn:.0f}')
+          print(f'{YLW}{SIG}x:  {WHT}{Sx:.4f}')
+          print(f'{YLW}{SIG}y:  {WHT}{Sy:.4f}')
+          print(f'{YLW}{SIG}x{SS2}: {WHT}{Sx2:.4f}')
+          print(f'{YLW}{SIG}y{SS2}: {WHT}{Sy2:.4f}')
+          print(f'{YLW}{SIG}xy: {WHT}{Sxy:.4f}')
+          if Sn > 1: # 2 or more data pairs
+            print(f'{YLW}x{OVR}:   {WHT}{Sx/Sn:.4f}')
+            print(f'{YLW}y{OVR}:   {WHT}{Sy/Sn:.4f}')
+            # correlation coefficent(r):
+            r = (Sn*Sxy-Sx*Sy)/math.sqrt((Sn*Sx2-Sx**2)*(Sn*Sy2-Sy**2))
+            print(f'{YLW}r:   {WHT}{r:.4f}')
+            # y = ax + b
+            # slope(a):
+            a = (Sn*Sxy-Sx*Sy)/(Sn*Sx2-Sx**2)
+            print(f'{YLW}a:   {WHT}{a:.4f}')
+            # y intercept(b):
+            b = Sy/Sn-a*Sx/Sn
+            print(f'{YLW}b:   {WHT}{b:.4f}')
+            if cmd_ln[n] == 'est':
+              # y=ax+b
+              x = pull()
+              push(a*x+b) # put y onto the stack
+          print(f'{WHT}') # blank line
+        #
+        #
         # it didn't match any token above, check to see if it's
         # a register. If not, assume it's an error.
         #
@@ -1127,7 +1196,7 @@ def calc(stack, mem, prog_listing, decimal_places):
       except KeyError:
         print(f"{RED}Key Error:{WHT}\n", token)
 
-
+# This part initializes/recalls everything now
 # if the mem file exists use it instead of initstack()
 if os.path.exists(memnam):
   fh=open(memnam, 'r', encoding='utf-8')
@@ -1135,17 +1204,28 @@ if os.path.exists(memnam):
   mem = ast.literal_eval(fh.readline())
   decimal_places = int(ast.literal_eval(fh.readline()))
   kbsc = ast.literal_eval(fh.readline())
+  stat_regs = ast.literal_eval(fh.readline()) # statistical registers
   fh.close()
 else:
   stack = initstack(stack_size)
   decimal_places = 4
   mem = {}
-  kbsc = {'#': 'rand', 'a': '+', 'b': 'xroot', 'c': 'chs',
-      'd': '/', 'f': '!', 'g': 'gamma', 'h': 'help', 'i': 'inv',
-      'j': 'rad', 'k': 'scut', 'l': 'ln', 'm': 'mem', 'n': 'frac',
-      'o': '^', 'p': 'prog', 'q': 'exc', 'r': 'sqrt', 's': '-',
-      't': 'sq', 'u': 'deg', 'v': 'int', 'w': 'show', 'x': '*',
-      'y': 'swap', 'z': 'abs'}
+  kbsc = {'#': 'rand', '[': 'stat', 'a': '+', 'b': 'xroot', 'c': 'chs',
+          'd': '/', 'f': '!', 'g': 'gamma', 'h': 'help', 'i': 'inv',
+          'j': 'rad', 'k': 'scut', 'l': 'ln', 'm': 'mem', 'n': 'frac',
+          'o': '^', 'p': 'prog', 'q': 'exc', 'r': 'sqrt', 's': '-',
+          't': 'sq', 'u': 'deg', 'v': 'int', 'w': 'show', 'x': '*',
+          'y': 'swap', 'z': 'abs'}
+  stat_regs = [0, 0, 0, 0, 0, 0]
+#stat_vars   = ['Sn', 'Sx', 'Sy', 'Sx2', 'Sy2', 'Sxy']
+#for i,j in stat_vars, stat_regs:
+#  ast.literal_eval(i) = j
+Sn  = stat_regs[0]
+Sx  = stat_regs[1]
+Sy  = stat_regs[2]
+Sx2 = stat_regs[3]
+Sy2 = stat_regs[4]
+Sxy = stat_regs[5]
 
 # if a program file exists dump its contents into memory.
 # we'll 'import' its contents into memory whether we use it or not
@@ -1155,16 +1235,16 @@ else:
   prog_listing = []
 
 if __name__ == '__main__':
-  calc(stack, mem, prog_listing, decimal_places)
+  calc(stack, mem, prog_listing, decimal_places, stat_regs)
 
 # Addenda.
 # Differences between this and the HP15c include:
 #   No complex number support (though it would be easy to implement).
 #   No GOTO <line #> (no line numbers to go to).
-#   No matrix support.
+#   No matrix support. I'm lazy.
 #   No DSE or ISG commands (they're useful if space is limited... it's not).
-#   No integration.
-#   No statistical functionality.
+#   No integration. Slept thru calculus.
+#   No statistical functionality. Shouldn't be hard. I should do this...
 #   No solver (though the one in the 15c is really cool).
 #   While 15c programs don't require a label or ending 'RTN', this does.
 #   No H.M.S conversion (but would be easy to implement).
@@ -1191,6 +1271,10 @@ if __name__ == '__main__':
 #   Got operators 'dh' and 'hms' working.
 #   Added helpful info to 'r>p' operator upon use.
 #   Made minor changes to some print statements.
+#
+# Update 1.06
+#   Added two variable statistics.
+#   Cleaned up some code.
 #
 # To do:
 #   Help text needs lots of improvement
