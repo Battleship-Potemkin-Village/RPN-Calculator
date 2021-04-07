@@ -13,7 +13,7 @@
 # programming memory.  It's loaded every time the calculator is run and
 # is available at any time.  (The comments, of course, do NOT get loaded.)
 #
-# Programs for this calculator start with a label (LBL) and end with a 
+# Programs for this calculator start with a label (LBL) and end with a
 # return (RTN).  Everything in between is just the same key strokes you
 # put in manually except for the looping, branching, testing stuff,
 # and comments (anything after the '#' to the end of the line is ignored).
@@ -49,7 +49,7 @@ RTN
 # Input: a b c (in that order) for ax^2 + bx + c = 0
 LBL qf
 0 + RD SWAP / 2 / CHS STO A DUP * RCL A
-SWAP RD RD / - SQRT STO A - 
+SWAP RD RD / - SQRT STO A -
 SWAP RCL A + DEL A CLS
 RTN
 
@@ -57,7 +57,7 @@ RTN
 # One point at (0,0) and the other at (z,t)
 # Line thru (0,0) has an angle of y
 # Line thru (z,t) has an angle of x
-LBL i2p 
+LBL i2p
 TAN STO B
 RU
 *
@@ -95,12 +95,7 @@ RTN
 
 # Want to know what everything in the stack looks like in radians?
 # (assumes everything in the stack is in radians and display it in degrees):
-LBL degrees
-RU DEG SHOW RAD
-RU DEG SHOW RAD
-RU DEG SHOW RAD
-RU DEG SHOW RAD
-RTN
+LBL degrees RU DEG SHOW RAD RU DEG SHOW RAD RU DEG SHOW RAD RU DEG SHOW RAD RTN
 
 # Now let's just show the full values of everything in the stack:
 LBL show
@@ -109,3 +104,8 @@ RU SHOW
 RU SHOW
 RU SHOW
 RTN
+
+# 'stat est' will find y given x, but this will find x given y:
+# y=ax+b >> y-b=ax >> (y-b)/a=x >> x=(y-b)/a
+LBL findx
+STAT b - STAT a /
