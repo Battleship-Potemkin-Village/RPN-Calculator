@@ -13,7 +13,7 @@ For example: 4 22 7 / + will divide 22 by 7 then add 4 to the result.
 A complete list of operators can be displayed by typing in: "help op"
 """
 
-version = "RPN Calc version 1.08b"
+version = "RPN Calc version 1.08c"
 
 # Notes:
 # ------
@@ -28,7 +28,7 @@ version = "RPN Calc version 1.08b"
 # The trig functions assume the angle to be in radians.
 # -
 # Operators are not case sensitive.  SIN, sin and sIn are the same.
-# Only labels and storage register names ARE case sensitive.
+# Only labels and memory register names ARE case sensitive.
 # -
 # Some operators return two values, these will be placed in the x
 # & y registers.
@@ -72,13 +72,14 @@ version = "RPN Calc version 1.08b"
 # program to have an 'infinite' stack just by replacing the body
 # of 'push()' & 'pull()' with stack.append(x) & stack.pop().
 #
-# Only known bug I know of is that the display doesn't show really
+# Only known issue I know of is that the display doesn't show really
 # small numbers in scientific notation.  It just shows them as '0.0'
 
 import math
 import os
 import ast
 import random
+import readline  # all you need to recall command history.
 
 # Global variables:
 # stack_size can be changed below (4 is the minimum), but only if
@@ -89,7 +90,7 @@ import random
 stack_size = 4  # size of the stack.
 stack_min = 4  # minimum stack size.
 stack = []  # List of ? size to hold the stack's values.
-mem = {}  # Dictionary of storage registers.
+mem = {}  # Dictionary of memory registers.
 memnam = os.path.splitext(__file__)[0] + ".mem"
 prognam = os.path.splitext(__file__)[0] + ".txt"
 
@@ -101,7 +102,8 @@ if os.name == "posix":  # other OS might not handle these properly:
     CLS = "\x1b[2J"  # Clears the screen above the stack
     SIG = "\u03A3"  # Sigma character
     SS2 = "\u00B2"  # Superscript 2 (as in ^2)
-    OVR = "\u0304"  # Puts a line over the char in front of it
+    OVR = "\u0304"  # Puts a line over the char that precedes it
+    SQR = "\u221A"  # square root
 else:
     RED = ""
     YLW = ""
@@ -110,6 +112,7 @@ else:
     SIG = "E"
     SS2 = "^2"
     OVR = "(mn)"
+    SQR = ""
 
 # just so we don't have to use shift key very much
 kbsc2 = {
@@ -195,7 +198,7 @@ op_dict = {
     "show": "Display the full value of x.",
     "sto": "Save the value in x to a named register (STO <ab0>).",
     "rcl": "Recall the value in a register (RCL <ab0>).",
-    "mem": "Display the storage registers and their contents.",
+    "mem": "Display the memory registers and their contents.",
     "clrg": "Clears the contents of all the registers.",
     "lbl": "Designates a label name to follow (LBL <a>).",
     "exc": "Executes a program starting at a label (EXC <a>).",
@@ -229,14 +232,15 @@ op_dict = {
     "scut": "Displays keyboard shortcuts.",
     "scutadd": "Add a keyboard shortcut: scutadd <shortcut> <operator/value>",
     "scutdel": "Delete a keyboard shortcut: scutdel <shortcut>",
-    "help": "I'm being repressed! Also: followed by an operator gives detailed info on \
-that operator, while 'op' will list all operators.",
+    "help": "I'm being repressed! Also: followed by an operator gives detailed info\n\
+on that operator, while 'op' will list all operators.",
     "version": "Display the current version number.",
     "stat": "When not followed by a modifier adds x & y to the data set.\n\
+Following with a number will enter x & y into the data set that many times.\n\
 Following with 'show' displays stat info without adding to it.\n\
 Following with 'undo' removes x & y from the data sets.\n\
 Following with 'clear' resets data to zero.\n\
-Following with 'store' copies the statistic registers to the user registers.\n\
+Following with 'save' copies the statistic registers to the user registers.\n\
 Following with 'est' uses 'x' to return an estimated 'y'.\n\
 Follow with 'n', 'Ex', 'Ey', 'Ex2', 'Ey2', 'Exy', 'x', 'y', 'r', 'a', or 'b'\n\
     to return that value to the stack.",
@@ -311,26 +315,26 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
     else:
         Mx = My = CCr = Sa = YIb = 0
 
-    incr = True  # in case you want to stop the pointer (n) from incrementing
+    incr = True  # in case you want to stop the pointer (it_r) from incrementing
 
     print(f"{CLS}{YLW}Type 'help' for documentation.")
     print(f"Type 'help op' for a list of available operators.")
-    print(f"Type 'help <oper>' (without braces) for specifics on an operator.")
+    print(f"Type 'help <full name of operator>' (without braces) for specifics on an operator.")
     print(f"Type 'scut' for a list of keyboard shortcuts.{WHT}\n")
 
     while True:  # loop endlessly until a break statement
 
-        n = 0  # token iterator
+        it_r = 0  # token iterator
 
         # Display the stack and prompt for input:
         reg = ["x:", "y:", "z:", "t:"]  # our stack labels
         i = len(reg) - 1  # index of the last label
         while i:  # prints out 'y', 'z' and 't'
-            print(reg[i], f"{stack[i]:,.{decimal_places}f}")
+            print(f"{YLW}{reg[i]}{WHT} {stack[i]:,.{decimal_places}f}")
             i -= 1
         # Now display x and prompt for the command line:
         # note: cmd_ln is the input line as a Python list.
-        cmd_ln = input(f"{reg[i]} {stack[0]:,.{decimal_places}f} ").split()
+        cmd_ln = input(f"{RED}{reg[0]}{WHT} {stack[0]:,.{decimal_places}f} ").split()
 
         # clear the screen; probably shouldn't be here.
         # this works in linux on my chromebook.
@@ -339,7 +343,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
             print(f"{CLS}")  # clear the screen.
 
         try:
-            if cmd_ln[n].lower() in ["quit", "exit", "close"]:
+            if cmd_ln[it_r].lower() in ["quit", "exit", "close"]:
                 fh = open(memnam, "w", encoding="utf-8")
                 fh.write(f"{stack}\n{mem}\n{decimal_places}\n{kbsc}\n")
                 stat_regs["Sn"] = Sn
@@ -358,10 +362,10 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
 
         # Execute the command line
         #
-        while n < len(cmd_ln):
+        while it_r < len(cmd_ln):
             try:
                 # make the space delimited string object a token:
-                token = cmd_ln[n].lower()  # is anything NaN.
+                token = cmd_ln[it_r].lower()  # is anything NaN.
                 #
                 # substitute a type shortcut for its operator.
                 if token in kbsc.keys():
@@ -420,10 +424,8 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     y = pull()
                     push(math.atan2(y, x))  # angle
                     push(math.hypot(x, y))  # magnitude
-                    print(
-                        f"{YLW}Angle(y): {WHT}{math.atan2(y,x):.4f}{YLW};"
-                        + f" Magnitude(x): {WHT}{math.hypot(x,y):.4f}\n"
-                    )
+                    print(f"{YLW}Angle(y): {WHT}{math.atan2(y,x):.4f}{YLW};"
+                        + f" Magnitude(x): {WHT}{math.hypot(x,y):.4f}\n")
                 #
                 # polar to rectangular conversion:
                 elif token == "p>r":
@@ -448,23 +450,21 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 #
                 # combinations of x into y:
                 elif token == "cnr":
-                    x = pull()
-                    y = pull()
-                    push(
-                        math.factorial(y) / (math.factorial(x) * math.factorial(y - x))
-                    )
+                    x = int(pull())  # forced int here to prevent push line from
+                    y = int(pull())  # from getting too long.
+                    push(math.factorial(y) / (math.factorial(x) * math.factorial(y - x)))
                 #
                 # permutations of x in y:
                 elif token == "pnr":
-                    x = pull()
-                    y = pull()
+                    x = int(pull())  # see "cnr" above
+                    y = int(pull())
                     push(math.factorial(y) / math.factorial(y - x))
                 #
                 # greatest common divisor of x & y:
                 elif token == "gcd":
                     x = pull()
                     y = pull()
-                    push(math.gcd(int(x), int(y)))
+                    push(math.gcd(int(x), int(y)))  # different method forcing ints
                 #
                 # unary operators:
                 #
@@ -735,7 +735,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 #
                 # return the value of the cmd line pointer
                 elif token == "ptr":
-                    push(float(n))
+                    push(float(it_r))
                 #
                 # generate a pseudo random number between 0 and 1:
                 elif token == "rand":
@@ -743,8 +743,8 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 #
                 # set the number of decimals to the following value:
                 elif token == "fix":
-                    n += 1
-                    decimal_places = abs(int(cmd_ln[n]))
+                    it_r += 1
+                    decimal_places = abs(int(cmd_ln[it_r]))
                 #
                 # show the whole value of the x register:
                 elif token == "show":
@@ -756,54 +756,54 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 elif token == "sto":
                     x = pull()
                     push(x)
-                    n += 1
-                    mem[cmd_ln[n]] = x
+                    it_r += 1
+                    mem[cmd_ln[it_r]] = x
                 #
                 # recall a value from 'memory':
                 elif token == "rcl":
-                    n += 1
-                    if cmd_ln[n] in mem.keys():
-                        push(mem[cmd_ln[n]])
+                    it_r += 1
+                    if cmd_ln[it_r] in mem.keys():
+                        push(mem[cmd_ln[it_r]])
+                        print(f"{YLW}{cmd_ln[it_r]}{WHT}\n")
                     else:
-                        print(f"{RED}Register {WHT}{cmd_ln[n]}{RED} not found.{WHT}\n")
+                        print(f"{RED}Register {WHT}{cmd_ln[it_r]}{RED} not found.{WHT}\n")
                 #
                 # delete a register:
                 elif token == "del":
-                    n += 1
-                    if cmd_ln[n] in mem:
-                        del mem[cmd_ln[n]]
+                    it_r += 1
+                    if cmd_ln[it_r] in mem.keys():
+                        del mem[cmd_ln[it_r]]
                     else:
-                        print(f"{RED}Register {WHT}{cmd_ln[n]}{RED} not found.{WHT}\n")
+                        print(f"{RED}Register {WHT}{cmd_ln[it_r]}{RED} not found.{WHT}\n")
                 #
-                # display the contents of the storage regsiters:
+                # display the contents of the memory regsiters:
                 elif token == "mem":
-                    print(f"{YLW}Storage registers:\n{str(mem)[1:-1]}{WHT}\n")
+                    print(f"{YLW}Memory registers:")
+                    print(f"{str(mem)[1:-1]}{WHT}\n")
                 #
                 # display keyboard shortcuts:
                 elif token == "scut":
-                    print(
-                        f'{YLW}Keyboard shortcuts:\n\
-                  {str(kbsc)[1:-1].replace(": ",":")}{WHT}\n'
-                    )
+                    print(f"{YLW}Keyboard shortcuts:")
+                    print(f'{str(kbsc)[1:-1].replace(": ",":")}{WHT}\n')
                 #
                 # add a shortcut to the list:
                 elif token == "scutadd":
-                    n += 1
-                    key = cmd_ln[n]
-                    n += 1
-                    val = cmd_ln[n]
+                    it_r += 1
+                    key = cmd_ln[it_r]
+                    it_r += 1
+                    val = cmd_ln[it_r]
                     kbsc[key] = val
                 #
                 # delete a shortcut from the list:
                 elif token == "scutdel":
-                    n += 1
-                    key = cmd_ln[n]
+                    it_r += 1
+                    key = cmd_ln[it_r]
                     if key in kbsc:
                         del kbsc[key]
                     else:
                         print(f"{RED}Shortcut {WHT}{key}{RED} not found.{WHT}\n")
                 #
-                # clear the contents of the storage registers:
+                # clear the contents of the memory registers:
                 elif token == "clrg":
                     mem.clear()
                     print(f"{YLW}Registers cleared.{WHT}\n")
@@ -818,8 +818,8 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 # along with the token immediately after it.
                 # EXC, GSB, GTO & RTN will use labels.
                 elif token == "lbl":
-                    n += 1  # now points to the labels descriptor
-                    # the n += 1 at the end will step over the label's
+                    it_r += 1  # now points to the labels descriptor
+                    # the it_r += 1 at the end will step over the label's
                     # descriptor
                 #
                 # executes the program starting at label x:
@@ -827,7 +827,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 # to allow basic calculator style programming...
                 elif token == "exc":
                     # setup a few things to allow jumping around
-                    n += 1
+                    it_r += 1
                     x = 0
                     pdict = {}
                     # build dict of labels in the format: {name: location}
@@ -837,29 +837,29 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                             pdict[prog_listing[x]] = x
                         x += 1
                     # if the label exists replace the command line
-                    # and set the pointer (n) to the start.
-                    if cmd_ln[n] in pdict:
-                        lbl_nam = cmd_ln[n]
+                    # and set the pointer (it_r) to the start.
+                    if cmd_ln[it_r] in pdict:
+                        lbl_nam = cmd_ln[it_r]
                         lbl_rtn = []
                         cmd_ln = prog_listing
-                        n = pdict[lbl_nam]
+                        it_r = pdict[lbl_nam]
                     else:
-                        print(f"{RED}Label {WHT}{cmd_ln[n]}{RED} not found.{WHT}\n")
+                        print(f"{RED}Label {WHT}{cmd_ln[it_r]}{RED} not found.{WHT}\n")
                 #
                 # gosub routine:
                 # This tosses the calling location onto the lbl_rtn
                 # stack we created in 'EXC' so we'll know where to
                 # return to.
                 elif token == "gsb":
-                    n += 1
-                    lbl_rtn.append(n)
-                    n = pdict[cmd_ln[n]]
+                    it_r += 1
+                    lbl_rtn.append(it_r)
+                    it_r = pdict[cmd_ln[it_r]]
                 #
                 # goto routine:
                 # Just like 'gsb' but no need to go back.
                 elif token == "gto":
-                    n += 1
-                    n = pdict[cmd_ln[n]]
+                    it_r += 1
+                    it_r = pdict[cmd_ln[it_r]]
                 #
                 # return - for end of program or subroutine:
                 # if called by a 'gsb' will go back to the token
@@ -867,9 +867,9 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 # program.
                 elif token == "rtn":
                     if len(lbl_rtn):
-                        n = lbl_rtn.pop()
+                        it_r = lbl_rtn.pop()
                     else:
-                        n = 0
+                        it_r = 0
                         cmd_ln = ["nop", "nop"]
                 #
                 # pauses a running program
@@ -889,42 +889,42 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     x = pull()
                     push(x)
                     if x:  # same as "if not x=0"
-                        n += 2
+                        it_r += 2
                 #
                 # test if x in not equal to 0:
                 elif token == "x!=0?":
                     x = pull()
                     push(x)
                     if not x:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is greater than 0:
                 elif token == "x>0?":
                     x = pull()
                     push(x)
                     if not x > 0:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is less than 0:
                 elif token == "x<0?":
                     x = pull()
                     push(x)
                     if not x < 0:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is greater than or equal to 0:
                 elif token == "x>=0?":
                     x = pull()
                     push(x)
                     if not x >= 0:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is less than or equal to 0:
                 elif token == "x<=0?":
                     x = pull()
                     push()
                     if not x <= 0:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is equal to y:
                 elif token == "x=y?":
@@ -933,7 +933,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if x != y:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is NOT equal to y:
                 elif token == "x!=y?":
@@ -942,7 +942,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if x == y:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is greater than y:
                 elif token == "x>y?":
@@ -951,7 +951,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if not x > y:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is less than y:
                 elif token == "x<y?":
@@ -960,7 +960,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if not x < y:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is greater than or equal to y:
                 elif token == "x>=y?":
@@ -969,7 +969,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if not x >= y:
-                        n += 2
+                        it_r += 2
                 #
                 # test if x is less than or equal to y:
                 elif token == "x<=y?":
@@ -978,15 +978,13 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                     push(y)
                     push(x)
                     if not x <= y:
-                        n += 2
+                        it_r += 2
                 #
                 # dump the program listing:
                 elif token == "prog":
-                    print(f"{YLW}Programming space:")
-                    print(
-                        f" ".join(i for i in prog_listing).replace("RTN", "RTN\n"),
-                        f"{WHT}",
-                    )
+                    print(f"{YLW}Programming space:\n ", end="")
+                    print(f" ".join(i for i in prog_listing).replace("RTN", "RTN\n"))
+                    print(f"{WHT}")
                 #
                 # edit the program data file:
                 elif token == "edit":
@@ -1004,36 +1002,31 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 # display help (in a convoluted fashion, but this *is*
                 # an exercise in learning how to program).
                 elif token == "help":
-                    n += 1
-                    if n < len(cmd_ln):
-                        if cmd_ln[n].lower() == "op":  # get a list of operators
+                    it_r += 1
+                    if it_r < len(cmd_ln):
+                        if cmd_ln[it_r].lower() in ["op", "o"]:  # list operators
                             s = str(op_dict.keys())[11:-2]
                             s = s.replace("'", "")
                             s = s.replace(",", "")
                             s = s.upper()
                             s = s.split()
                             s.sort()
-                            print(
-                                f"{YLW}Type 'help xxx' for specific help on an operator."
-                            )
+                            print(f"{YLW}Type 'help xxx' for specific help on an operator.")
                             print(f"Available operators are:")
                             for x in s:
                                 print(f"'{x}'", end=" ")
                             print(f"\nOperators are not case sensitive.")
-                            print(f"Type 'scut' for shortcut keys.{WHT}\n")
+                            print(f"Shortcut key shows in parentheses.{WHT}\n")
                         # look up help on a particular operator:
-                        elif cmd_ln[n].lower() in op_dict:
-                            print(f"{YLW}{cmd_ln[n].upper()}", end="")
-                            if cmd_ln[n] in kbsc.values():
+                        elif cmd_ln[it_r].lower() in op_dict:
+                            print(f"{YLW}{cmd_ln[it_r].upper()}", end="")
+                            if cmd_ln[it_r].lower() in kbsc.values():
                                 print(
-                                    f"({list(kbsc.keys())[list(kbsc.values()).index(cmd_ln[n])]})",
-                                    end="",
-                                )
-                            print(f": {str(op_dict[cmd_ln[n].lower()])}{WHT}\n")
+                                    f"({list(kbsc.keys())[list(kbsc.values()).index(cmd_ln[it_r].lower())]})",
+                                    end="")  # confusing way to sort a dictionary for printing.
+                            print(f": {str(op_dict[cmd_ln[it_r].lower()])}{WHT}\n")
                         else:
-                            print(
-                                f"{RED}Operator {WHT}{cmd_ln[n]}{RED} not found.{WHT}\n"
-                            )
+                            print(f"{RED}Operator {WHT}{cmd_ln[it_r]}{RED} not found.{WHT}\n")
                     else:  # just print the __doc__ string from the top
                         print(f"{YLW}{__doc__}{WHT}")
                 #
@@ -1060,18 +1053,25 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                         "a": Sa,
                         "b": YIb,
                     }
-                    # if there's nothing after 'stat' then add x & y to the stat registers
-                    if n + 1 == len(cmd_ln):
-                        # All the statistical variables we need
-                        Sn += 1  # incr n - tracks # of xy pairs
-                        Sx += x  # sum of the x entries
-                        Sy += y  # sum of the y entries
-                        Sx2 += x ** 2  # sum of the squares of the x entries
-                        Sy2 += y ** 2  # sum of the squares of the y entries
-                        Sxy += x * y  # sum of the product of the x & y entries
+
+                    num = 0
+                    if it_r + 1 == len(cmd_ln):  # blank after 'stat'?
+                        num = 1  # then just make one entry
                     else:
-                        n += 1  # increment to the next token
-                    if ( Sn > 1 and Sn * Sx2 != Sx ** 2 and Sn * Sy2 != Sy ** 2):
+                        it_r += 1  # increment to the next item in cmd_ln
+                    if cmd_ln[it_r].isdigit():
+                        num = int(cmd_ln[it_r])
+                    if num > 0:
+                        i = 0
+                        while i < num:  # All the statistical variables we need
+                            Sn += 1  # incr it_r - tracks # of xy pairs
+                            Sx += x  # sum of the x entries
+                            Sy += y  # sum of the y entries
+                            Sx2 += x ** 2  # sum of the squares of the x entries
+                            Sy2 += y ** 2  # sum of the squares of the y entries
+                            Sxy += x * y  # sum of the product of the x & y entries
+                            i += 1
+                    if Sn > 1 and Sn * Sx2 != Sx ** 2 and Sn * Sy2 != Sy ** 2:
                         Mx = Sx / Sn  # mean of x
                         My = Sy / Sn  # mean of y
                         CCr = (Sn * Sxy - Sx * Sy) / math.sqrt(
@@ -1079,26 +1079,30 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                         )  # correlation coefficent(r):
                         Sa = (Sn * Sxy - Sx * Sy) / (Sn * Sx2 - Sx ** 2)  # slope(a):
                         YIb = Sy / Sn - Sa * Sx / Sn  # y intercept(b):
-                    if cmd_ln[n] == "clear":
+                    if cmd_ln[it_r].lower() == "clear":
                         Sn = Sx = Sy = Sx2 = Sy2 = Sxy = Mx = My = CCr = Sa = YIb = 0
-                    elif cmd_ln[n] == "undo":
+                    elif cmd_ln[it_r].lower() == "undo":
                         Sn -= 1
                         Sx -= x
                         Sy -= y
                         Sx2 -= x ** 2
                         Sy2 -= y ** 2
                         Sxy -= x * y
-                    elif cmd_ln[n] == "store":  # Add the stat regs to the user regs
+                    elif (
+                        cmd_ln[it_r].lower() == "save"
+                    ):  # Add the stat regs to the user regs
                         mem.update(stat_dict)
                     # mem = mem | stat_dict # << I think this method requires Python 3.9.
                     #
-                    elif cmd_ln[n] == "est":
+                    elif cmd_ln[it_r].lower() == "est":
+                        x = pull()  # just to clear the estimate off the stack
                         push(Sa * x + YIb)  # y=ax+b; put y onto the stack
-                    elif cmd_ln[n] in stat_dict.keys():
-                        push(stat_dict[cmd_ln[n]])
+                        print(f"{YLW}x: {WHT}{x}{YLW}, ~y: {WHT}{Sa * x + YIb}\n")
+                    elif cmd_ln[it_r].lower() in stat_dict.keys():
+                        push(stat_dict[cmd_ln[it_r]])
                     # Essentially anything after 'stat' will stop x & y from being added.
                     # Originally required 'show' to display stat data, but now you can
-                    # type anything not specified above.
+                    # type anything that's not a number or specified above.
                     print(f"{YLW}n:   {WHT}{Sn:.0f}")
                     print(f"{YLW}{SIG}x:  {WHT}{Sx:.4f}")
                     print(f"{YLW}{SIG}y:  {WHT}{Sy:.4f}")
@@ -1119,31 +1123,31 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
                 # note that if you name a register the same as a command
                 # you'll need to use 'rcl'.
                 else:
-                    if cmd_ln[n] in mem.keys():
-                        push(mem[cmd_ln[n]])
+                    if cmd_ln[it_r] in mem.keys():
+                        push(mem[cmd_ln[it_r]])
                     else:
                         print(f"{RED}Invalid Operator: {WHT}{token}\n")
                 #
                 # increment the command line pointer to the next token
                 # and go back through this loop:
                 if incr == True:
-                    n += 1
+                    it_r += 1
                 incr = True
 
             # exception list
             except ValueError:
-                print(f"{RED}Value error:{WHT}\n", token)
+                print(f"{RED}Value error: {WHT}{token}\n")
                 break
             except ZeroDivisionError:
-                print(f"{RED}Division by zero error{WHT}\n")
+                print(f"{RED}Division by zero error: {WHT}{token}\n")
                 break
             except OverflowError:
-                print(f"{RED}Overflow error:{WHT}\n", token)
+                print(f"{RED}Overflow error: {WHT}{token}\n")
                 break
             except IndexError:
-                print(f"{RED}Index Error:{WHT}\n", token)
+                print(f"{RED}Index Error: {WHT}{token}\n")
             except KeyError:
-                print(f"{RED}Key Error:{WHT}\n", token)
+                print(f"{RED}Key Error: {WHT}{token}\n")
     # end of the very long looping function calc()
 
 
@@ -1152,7 +1156,7 @@ def calc(stack, mem, prog_listing, decimal_places, stat_regs):
 if os.path.exists(memnam):
     fh = open(memnam, "r", encoding="utf-8")
     stack = ast.literal_eval(fh.readline())  # a list of floats
-    mem = ast.literal_eval(fh.readline())  # dictionary of storage registers
+    mem = ast.literal_eval(fh.readline())  # dictionary of memory registers
     decimal_places = int(ast.literal_eval(fh.readline()))  # single int
     kbsc = ast.literal_eval(fh.readline())  # dictionary of keyboard shortcuts
     stat_regs = ast.literal_eval(fh.readline())  # statistical registers
@@ -1245,6 +1249,11 @@ if __name__ == "__main__":
 # Update 1.08b
 #   Think I finally got 'stat' to not do division by 0.
 #   Ran it through Black just for fun.
+#
+# Update 1.08c
+#   Just replaced 'n' with 'it_r' to avoid confusion over what 'n' is.
+#   typing 'h o' is the same as 'help op'... unless 'o' becomes an operator.
+#   fixed a minor bug where it wouldn't show short cut key when using 'help X'
 #
 # To do:
 #   Help text needs lots of improvement.

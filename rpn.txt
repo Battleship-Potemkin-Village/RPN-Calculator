@@ -44,7 +44,7 @@ RTN
 # Like this:
 # lbl b x<0? gsb C 1 gto f lbl C 2 lbl f rtn
 
-# And now: A SOLVER FOR THE QUADRATIC EQUATION.
+# And now: A SOLVER FOR A QUADRATIC EQUATION.
 # (Note that this requires a 4 level stack.)
 # Input: a b c (in that order) for ax^2 + bx + c = 0
 LBL qf
@@ -55,8 +55,8 @@ RTN
 
 # INTERSECTION OF TWO LINES:
 # One point at (0,0) and the other at (z,t)
-# Line thru (0,0) has an angle of y
-# Line thru (z,t) has an angle of x
+# Line thru (0,0) has an angle of y radians
+# Line thru (z,t) has an angle of x radians
 LBL i2p
 TAN STO B
 RU
@@ -93,9 +93,14 @@ LBL con
 299_792_458 STO c RD # Speed of light; m/s
 RTN
 
-# Want to know what everything in the stack looks like in radians?
+# Want to know what everything in the stack looks like in degrees?
 # (assumes everything in the stack is in radians and display it in degrees):
-LBL degrees RU DEG SHOW RAD RU DEG SHOW RAD RU DEG SHOW RAD RU DEG SHOW RAD RTN
+LBL degrees
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RU DEG SHOW RAD
+RTN
 
 # Now let's just show the full values of everything in the stack:
 LBL show
@@ -105,7 +110,7 @@ RU SHOW
 RU SHOW
 RTN
 
-# 'stat est' will find y given x, but this will find x given y:
+# 'stat est' will find y for a given x, but this will find x for a given y:
 # y=ax+b >> y-b=ax >> (y-b)/a=x >> x=(y-b)/a
 LBL findx
 STAT b - STAT a /
