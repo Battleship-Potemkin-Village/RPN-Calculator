@@ -85,7 +85,7 @@ DEG SHOW RAD
 RTN
 
 # List of mathmatical constants that might be useful:
-LBL con
+LBL constants
 6.674E-11 STO G RD # Newton's; Nm^2/kg^2
 9.81 STO g RD # m/s^2
 6.022e23 STO AVO RD # Avogadro's constant
@@ -112,5 +112,6 @@ RTN
 
 # 'stat est' will find y for a given x, but this will find x for a given y:
 # y=ax+b >> y-b=ax >> (y-b)/a=x >> x=(y-b)/a
-LBL findx
+LBL estx
 STAT b - STAT a /
+RTN
